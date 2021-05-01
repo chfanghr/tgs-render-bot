@@ -3,5 +3,10 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/rlottie-to-gif-api" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/rlottie-to-gif-api/libs/gif-h" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/rlottie-to-gif-api/libs/gzip-hpp" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/rlottie-to-gif-api/libs/oatpp" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/rlottie-to-gif-api/libs/rlottie" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/rlottie-to-gif-api/libs/zlib" vcs="Git" />
   </component>
 </project>

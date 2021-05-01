@@ -2,7 +2,7 @@ version: '3'
 
 services:
   botService:
-    container_name: bot
+    container_name: TgsRenderBotService
     build: ./
     image: tgs-render-bot
     volumes:
@@ -10,14 +10,14 @@ services:
       - "./cache:/cache"
     restart: always
     environment:
-      - REDIS_URL=redis://redis:6379
-      - RENDER_API=http://renderer:8000
+      - REDIS_URL=redis://TgsRenderBotRedis:6379
+      - RENDER_API=http://TgsRenderBotRenderer:8000
   redis:
-    container_name: redis
+    container_name: TgsRenderBotRedis
     image: redis
     restart: always
   rlottie-to-gif-api:
-    container_name: renderer
+    container_name: TgsRenderBotRenderer
     build: ./rlottie-to-gif-api
     image: rlottie-to-gif-api
     restart: always
