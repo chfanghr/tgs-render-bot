@@ -221,12 +221,12 @@ func getConvertedStickerFilename(sticker *telebot.Sticker) string {
 	return sticker.UniqueID + ".gif"
 }
 
-func (s *Service) getStickerCachePath(sticker *telebot.Sticker) string {
+func (s *Service) getAnimatedStickerCachePath(sticker *telebot.Sticker) string {
 	return path.Join(s.conf.CacheDir, getConvertedStickerFilename(sticker))
 }
 
-func (s *Service) getStickerFromCache(sticker *telebot.Sticker) ([]byte, error) {
-	cachePath := s.getStickerCachePath(sticker)
+func (s *Service) getAnimatedStickerFromCache(sticker *telebot.Sticker) ([]byte, error) {
+	cachePath := s.getAnimatedStickerCachePath(sticker)
 
 	inMemoryCache, err := s.redisClient.Get(s.redisClient.Context(), cachePath).Result()
 	if err != nil {
@@ -240,7 +240,7 @@ func (s *Service) getStickerFromCache(sticker *telebot.Sticker) ([]byte, error) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file: %w", err)
 		}
-		go s.cacheStickerToRedis(sticker, data)
+		go s.cacheAnimatedStickerToRedis(sticker, data)
 		return data, nil
 	}
 
@@ -248,18 +248,26 @@ func (s *Service) getStickerFromCache(sticker *telebot.Sticker) ([]byte, error) 
 }
 
 func (s *Service) handleStickerMessage(message *telebot.Message) {
-	if message.Sticker == nil || !message.Sticker.Animated {
-		s.sendMessage(message.Chat, "Please send an animated sticker.")
+	if message.Sticker == nil {
+		s.sendMessage(message.Chat, "Please send a sticker message")
 		return
 	}
+	if message.Sticker.Animated {
+		s.handleAnimatedStickerMessage(message.Chat, message)
+	} else {
+		s.handleNonAnimatedSticker(message.Chat, message)
+	}
+}
+
+func (s *Service) handleAnimatedStickerMessage(chat *telebot.Chat, message *telebot.Message) {
 	s.sendMessage(message.Chat, "Your sticker is being processed...")
 
 	convertedFileName := getConvertedStickerFilename(message.Sticker)
-	cachedStickerData, err := s.getStickerFromCache(message.Sticker)
+	cachedStickerData, err := s.getAnimatedStickerFromCache(message.Sticker)
 	if err != nil {
 		s.logger.Infof("failed to get sticker from cache: %v", err)
 	} else {
-		s.sendConvertedStickerData(message.Chat, cachedStickerData, convertedFileName)
+		s.sendConvertedStickerData(chat, cachedStickerData, convertedFileName)
 		return
 	}
 
@@ -277,22 +285,22 @@ func (s *Service) handleStickerMessage(message *telebot.Message) {
 		return
 	}
 
-	s.sendConvertedStickerData(message.Chat, gifData, convertedFileName)
-	go s.cacheSticker(message.Sticker, gifData)
+	s.sendConvertedStickerData(chat, gifData, convertedFileName)
+	go s.cacheAnimatedSticker(message.Sticker, gifData)
 }
 
-func (s *Service) cacheSticker(sticker *telebot.Sticker, gifData []byte) {
-	go s.cacheStickerToRedis(sticker, gifData)
+func (s *Service) cacheAnimatedSticker(sticker *telebot.Sticker, gifData []byte) {
+	go s.cacheAnimatedStickerToRedis(sticker, gifData)
 
-	cachePath := s.getStickerCachePath(sticker)
+	cachePath := s.getAnimatedStickerCachePath(sticker)
 	err := ioutil.WriteFile(cachePath, gifData, 0600)
 	if err != nil {
 		s.logger.Warningf("failed to cache %v in filesystem: %w", cachePath, err)
 	}
 }
 
-func (s *Service) cacheStickerToRedis(sticker *telebot.Sticker, gifData []byte) {
-	cachePath := s.getStickerCachePath(sticker)
+func (s *Service) cacheAnimatedStickerToRedis(sticker *telebot.Sticker, gifData []byte) {
+	cachePath := s.getAnimatedStickerCachePath(sticker)
 	_, err := s.redisClient.Set(s.redisClient.Context(), cachePath, gifData, s.conf.RedisCacheExpireDuration).Result()
 	if err != nil {
 		s.logger.Warningf("failed to cache %v in redis: %v", cachePath, err)
@@ -300,12 +308,29 @@ func (s *Service) cacheStickerToRedis(sticker *telebot.Sticker, gifData []byte) 
 }
 
 func (s *Service) handleRenderCommand(m *telebot.Message) {
-	if m.ReplyTo == nil || m.ReplyTo.Sticker == nil || !m.ReplyTo.Sticker.Animated {
-		s.sendMessage(m.Chat, "Please reply to an animated sticker message with /render")
+	if m.ReplyTo == nil || m.ReplyTo.Sticker == nil {
+		s.sendMessage(m.Chat, "Please reply to a sticker message with /render")
 		return
 	}
 
-	s.handleStickerMessage(m.ReplyTo)
+	if m.ReplyTo.Sticker.Animated {
+		s.handleAnimatedStickerMessage(m.Chat, m.ReplyTo)
+	} else {
+		s.handleNonAnimatedSticker(m.Chat, m.ReplyTo)
+	}
+}
+
+func (s *Service) handleNonAnimatedSticker(chat *telebot.Chat, m *telebot.Message) {
+	document := &telebot.Document{
+		File:     m.Sticker.File,
+		FileName: m.Sticker.UniqueID,
+	}
+
+	_, err := s.bot.Send(chat, document)
+	if err != nil {
+		s.logger.Errorf("failed to send document: %v", err)
+		s.informFailure(chat)
+	}
 }
 
 type tgsRenderRequest struct {
