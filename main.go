@@ -166,13 +166,10 @@ func (s *Service) sendMessage(chat *telebot.Chat, message string) {
 
 func (s *Service) messageFilter(update *telebot.Update) bool {
 	s.logger.Infof("telegram message received: %v", update.Message.ID)
-	if update.Message.Sticker == nil || !update.Message.Sticker.Animated {
-		s.sendMessage(update.Message.Chat, "Please send an animated sticker.")
-		return false
-	}
-	s.sendMessage(update.Message.Chat, "Your sticker is being processed...")
 	return true
 }
+
+const renderCommand = "/render"
 
 func (s *Service) setupBot() error {
 	var client *http.Client
@@ -215,6 +212,7 @@ func (s *Service) setupBot() error {
 	}
 
 	s.bot.Handle(telebot.OnSticker, s.handleStickerMessage)
+	s.bot.Handle(renderCommand, s.handleRenderCommand)
 
 	return nil
 }
@@ -250,6 +248,12 @@ func (s *Service) getStickerFromCache(sticker *telebot.Sticker) ([]byte, error) 
 }
 
 func (s *Service) handleStickerMessage(message *telebot.Message) {
+	if message.Sticker == nil || !message.Sticker.Animated {
+		s.sendMessage(message.Chat, "Please send an animated sticker.")
+		return
+	}
+	s.sendMessage(message.Chat, "Your sticker is being processed...")
+
 	convertedFileName := getConvertedStickerFilename(message.Sticker)
 	cachedStickerData, err := s.getStickerFromCache(message.Sticker)
 	if err != nil {
@@ -293,6 +297,15 @@ func (s *Service) cacheStickerToRedis(sticker *telebot.Sticker, gifData []byte) 
 	if err != nil {
 		s.logger.Warningf("failed to cache %v in redis: %v", cachePath, err)
 	}
+}
+
+func (s *Service) handleRenderCommand(m *telebot.Message) {
+	if m.ReplyTo == nil || m.ReplyTo.Sticker == nil || !m.ReplyTo.Sticker.Animated {
+		s.sendMessage(m.Chat, "Please reply to a animated sticker message with /render")
+		return
+	}
+
+	s.handleStickerMessage(m.ReplyTo)
 }
 
 type tgsRenderRequest struct {
