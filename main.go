@@ -301,7 +301,7 @@ func (s *Service) cacheStickerToRedis(sticker *telebot.Sticker, gifData []byte) 
 
 func (s *Service) handleRenderCommand(m *telebot.Message) {
 	if m.ReplyTo == nil || m.ReplyTo.Sticker == nil || !m.ReplyTo.Sticker.Animated {
-		s.sendMessage(m.Chat, "Please reply to a animated sticker message with /render")
+		s.sendMessage(m.Chat, "Please reply to an animated sticker message with /render")
 		return
 	}
 
